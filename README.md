@@ -19,8 +19,6 @@
 go get ***REMOVED***/taskflow
 ```
 
-> Adjust for your actual import path.
-
 ---
 
 ## Database Schema
