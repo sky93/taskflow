@@ -11,7 +11,7 @@ type TaskFlow struct {
 	mgr *Manager // We set this once we start workers
 }
 
-func New(cfg *Config) *TaskFlow {
+func New(cfg Config) *TaskFlow {
 	// Provide default log functions if the user didn't set them
 	if cfg.InfoLog == nil {
 		cfg.InfoLog = defaultInfoLog
@@ -21,7 +21,7 @@ func New(cfg *Config) *TaskFlow {
 	}
 
 	return &TaskFlow{
-		cfg: cfg,
+		cfg: &cfg,
 	}
 }
 
