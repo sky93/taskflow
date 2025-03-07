@@ -16,7 +16,7 @@
 ## Installation
 
 ```bash
-go get ***REMOVED***/taskflow
+go get github.com/sky93/taskflow
 ```
 
 ---
@@ -63,7 +63,7 @@ import (
     "fmt"
     "time"
 
-    "***REMOVED***/taskflow"
+    "github.com/sky93/taskflow"
     _ "github.com/go-sql-driver/mysql"
 )
 

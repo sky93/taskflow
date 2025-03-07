@@ -1,4 +1,4 @@
-module ***REMOVED***/taskflow
+module github.com/sky93/taskflow
 
 go 1.24.0
 
