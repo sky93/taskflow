@@ -1,6 +1,7 @@
 package taskflow
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -30,9 +31,11 @@ WHERE
   AND (locked_until IS NULL OR locked_until < NOW())
   AND retry_count < ?
   AND available_at <= NOW()
+ORDER BY available_at
 LIMIT 1
 FOR UPDATE
 `
+	var pldJson []byte
 	row := tx.QueryRow(query, cfg.RetryCount)
 	var rec JobRecord
 	var operationStr, statusStr string
@@ -40,7 +43,7 @@ FOR UPDATE
 		&rec.ID,
 		&operationStr,
 		&statusStr,
-		&rec.Payload,
+		&pldJson,
 		&rec.Output,
 		&rec.LockedBy,
 		&rec.LockedUntil,
@@ -56,6 +59,9 @@ FOR UPDATE
 		}
 		return nil, err
 	}
+	if err = json.Unmarshal(pldJson, &rec.Payload); err != nil {
+		return nil, err
+	}
 	rec.Operation = Operation(operationStr)
 	rec.Status = JobStatus(statusStr)
 	return &rec, nil
@@ -65,23 +71,31 @@ func assignJobToWorker(tx *sql.Tx, jobID uint64, workerID string, lockUntil time
 	stmt := `
 UPDATE card.jobs
 SET 
-  status = 'IN_PROGRESS',
+  status = ?,
   locked_by = ?,
   locked_until = ?,
   updated_at = ?
 WHERE id = ?
 `
 	_, err := tx.Exec(stmt,
+		JobInProgress,
 		workerID,
 		lockUntil,
-		time.Now().UTC().Round(time.Second),
+		time.Now().UTC().Round(time.Microsecond),
 		jobID,
 	)
 	return err
 }
 
-func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output *string, incrementRetry bool, availableAt *time.Time) error {
-	outputJson, _ := json.Marshal(output)
+func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time) error {
+	outputJson, err := json.Marshal(output)
+	if err != nil {
+		return err
+	}
+	outputQ := outputJson
+	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "null" {
+		outputQ = nil
+	}
 
 	setClauses := []string{
 		"status = ?",
@@ -92,7 +106,7 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output *string, 
 	}
 	args := []interface{}{
 		finalStatus,
-		outputJson,
+		outputQ,
 		time.Now().UTC().Round(time.Microsecond),
 	}
 
@@ -108,6 +122,24 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output *string, 
 	args = append(args, jobID)
 
 	query := fmt.Sprintf("UPDATE card.jobs SET %s WHERE id = ?", strings.Join(setClauses, ", "))
-	_, err := db.Exec(query, args...)
+	_, err = db.Exec(query, args...)
 	return err
+}
+
+func createJob(ctx context.Context, tf *TaskFlow, operation Operation, payload any, executeAt time.Time) (int64, error) {
+	plq, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+	now := time.Now().Round(time.Microsecond)
+	query := "INSERT INTO card.jobs (operation, status, payload, locked_by, locked_until, retry_count, available_at, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?)"
+	res, err := tf.cfg.DB.ExecContext(ctx, query, operation, JobPending, plq, executeAt, now, now)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert job: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get lastInsertId: %w", err)
+	}
+	return id, nil
 }

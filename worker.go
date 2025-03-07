@@ -51,14 +51,21 @@ func (w *Worker) Run(ctx context.Context) {
 				WorkerID: w.id,
 			})
 			w.fetchAndProcess(ctx)
+
+		case <-w.manager.wakeup:
+			// got a wakeup request from CreateJob (or somewhere)
+			w.cfg.logInfo(LogEvent{
+				Message:  fmt.Sprintf("Worker %s got wakeup signal, polling now...", w.id),
+				WorkerID: w.id,
+			})
+			w.fetchAndProcess(ctx)
 		}
 	}
 }
 
 func (w *Worker) fetchAndProcess(ctx context.Context) {
 	w.status = WorkerIdle
-
-	tx, err := w.cfg.DB.Begin()
+	tx, err := w.cfg.DB.BeginTx(ctx, nil)
 	if err != nil {
 		w.cfg.logError(LogEvent{
 			Message:  fmt.Sprintf("Error starting TX for worker %s", w.id),
@@ -84,7 +91,7 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 		return
 	}
 
-	lockUntil := time.Now().Add(2 * time.Minute)
+	lockUntil := time.Now().Add(w.cfg.JobTimeout)
 	if err := assignJobToWorker(tx, jobRec.ID, w.id, lockUntil); err != nil {
 		_ = tx.Rollback()
 		w.cfg.logError(LogEvent{
@@ -170,26 +177,25 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 }
 
 // executeJob calls the appropriate handler for the job’s operation, optionally enforcing a timeout.
-func (w *Worker) executeJob(ctx context.Context, jobRec *JobRecord) (*string, error) {
-	handler, err := getHandler(jobRec.Operation)
+func (w *Worker) executeJob(ctx context.Context, jobRec *JobRecord) (any, error) {
+	handler, err := w.getHandler(jobRec.Operation)
 	if err != nil {
 		return nil, err
 	}
 
 	if w.cfg.JobTimeout <= 0 {
-		return handler(jobRec.Payload)
+		return handler(*jobRec)
 	}
 
-	// run in a sub-context with the user-defined timeout
 	jobCtx, cancel := context.WithTimeout(ctx, w.cfg.JobTimeout)
 	defer cancel()
 
 	doneCh := make(chan struct{})
-	var output *string
+	var output any
 	var runErr error
 
 	go func() {
-		output, runErr = handler(jobRec.Payload)
+		output, runErr = handler(*jobRec)
 		close(doneCh)
 	}()
 

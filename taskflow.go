@@ -2,13 +2,15 @@ package taskflow
 
 import (
 	"context"
-	"fmt"
+	"sync"
 	"time"
 )
 
 type TaskFlow struct {
-	cfg *Config
-	mgr *Manager // We set this once we start workers
+	cfg       *Config
+	mgr       *Manager // We set this once we start workers
+	handlers  map[Operation]JobHandler
+	handlerMu sync.RWMutex
 }
 
 func New(cfg Config) *TaskFlow {
@@ -21,13 +23,32 @@ func New(cfg Config) *TaskFlow {
 	}
 
 	return &TaskFlow{
-		cfg: &cfg,
+		cfg:      &cfg,
+		handlers: make(map[Operation]JobHandler),
 	}
 }
 
 // CreateJob inserts a new job into the database
-func (tf *TaskFlow) CreateJob(operation Operation, payload string) (uint64, error) {
-	return createJob(tf.cfg, operation, payload)
+func (tf *TaskFlow) CreateJob(ctx context.Context, operation Operation, payload any, executeAt time.Time) (int64, error) {
+	// Actually insert the job
+	id, err := createJob(ctx, tf, operation, payload, executeAt)
+	if err != nil {
+		return 0, err
+	}
+
+	// If the job is ready now
+	if executeAt.Before(time.Now()) {
+		// Send a wakeup signal to let workers check immediately
+		if tf.mgr != nil {
+			select {
+			case tf.mgr.wakeup <- struct{}{}:
+				// wake worker
+			default:
+				// channel is full or no manager; ignore
+			}
+		}
+	}
+	return id, nil
 }
 
 // StartWorkers spawns `count` workers to process jobs using the current config.
@@ -39,7 +60,7 @@ func (tf *TaskFlow) StartWorkers(ctx context.Context, count int) {
 		})
 		return
 	}
-	mgr := startWorkersInternal(ctx, count, tf.cfg)
+	mgr := startWorkersInternal(ctx, count, tf.cfg, tf.handlers)
 	tf.mgr = mgr
 }
 
@@ -54,21 +75,4 @@ func (tf *TaskFlow) Shutdown(timeout time.Duration) {
 	tf.mgr.Shutdown(timeout)
 	tf.mgr = nil
 	tf.cfg.logInfo(LogEvent{Message: "TaskFlow shutdown complete."})
-}
-
-func createJob(cfg *Config, operation Operation, payload string) (uint64, error) {
-	query := `
-INSERT INTO card.jobs 
-(operation, status, payload, locked_by, locked_until, retry_count, available_at, created_at, updated_at)
-VALUES (?, 'PENDING', ?, NULL, NULL, 0, NOW(), NOW(), NOW())
-`
-	res, err := cfg.DB.Exec(query, operation, payload)
-	if err != nil {
-		return 0, fmt.Errorf("failed to insert job: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get lastInsertId: %w", err)
-	}
-	return uint64(id), nil
 }

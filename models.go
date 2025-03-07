@@ -17,21 +17,13 @@ const (
 // Operation is a type for your job "name" or "action" (e.g., "ADD_CUSTOMER").
 type Operation string
 
-const (
-	OperationAddCustomer        Operation = "ADD_CUSTOMER"
-	OperationIssueCard          Operation = "ISSUE_CARD"
-	OperationActivateCard       Operation = "ACTIVATE_CARD"
-	OperationActivateCardSwitch Operation = "ACTIVATE_CARD_SWITCH"
-	OperationPostCard           Operation = "POST_CARD"
-)
-
 // JobRecord corresponds to one row in the card.jobs table.
 type JobRecord struct {
 	ID          uint64
 	Operation   Operation
 	Status      JobStatus
-	Payload     *string
-	Output      *string
+	Payload     any
+	Output      any
 	LockedBy    *string
 	LockedUntil *time.Time
 	RetryCount  uint
