@@ -3,6 +3,7 @@
 </div>
 
 # ⏳taskflow
+[![Go Reference](https://pkg.go.dev/badge/github.com/sky93/taskflow.svg)](https://pkg.go.dev/github.com/sky93/taskflow)
 
 **taskflow** is a lightweight Go library for running background jobs from a MySQL queue table. It handles:
 
