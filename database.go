@@ -89,17 +89,17 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 		return err
 	}
 	outputQ := outputJson
-	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "\"null\"" || string(outputJson) == "null" {
+	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "\"null\"" || string(outputJson) == "null" || string(outputJson) == "\"\"" {
 		outputQ = nil
 	}
 
-	errorOutputJson, err := json.Marshal(errorOutput.Error())
+	errorOutputJson, err := json.Marshal(errorOutput)
 	if err != nil {
 		return err
 	}
 	errorOutputQ := errorOutputJson
-	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "\"null\"" || string(errorOutputJson) == "null" {
-		errorOutputJson = nil
+	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "\"null\"" || string(errorOutputJson) == "null" || string(errorOutputJson) == "\"\"" {
+		errorOutputQ = nil
 	}
 
 	setClauses := []string{
