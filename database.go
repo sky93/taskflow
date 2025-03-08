@@ -83,22 +83,22 @@ WHERE id = ?
 	return err
 }
 
-func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time, errorOutput any) error {
+func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time, errorOutput error) error {
 	outputJson, err := json.Marshal(output)
 	if err != nil {
 		return err
 	}
 	outputQ := outputJson
-	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "null" {
+	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "\"null\"" {
 		outputQ = nil
 	}
 
-	errorOutputJson, err := json.Marshal(output)
+	errorOutputJson, err := json.Marshal(errorOutput.Error())
 	if err != nil {
 		return err
 	}
 	errorOutputQ := errorOutputJson
-	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "null" {
+	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "\"null\"" {
 		errorOutputJson = nil
 	}
 
