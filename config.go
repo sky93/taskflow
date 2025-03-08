@@ -28,7 +28,7 @@ type LogEvent struct {
 
 // Config holds the settings and resources needed by the queue system.
 type Config struct {
-	// DB is the user-provided database connection where the card.jobs table is stored.
+	// DB is the user-provided database connection where the jobs table is stored.
 	DB *sql.DB
 
 	// RetryCount is how many times we allow a job to fail before ignoring it.

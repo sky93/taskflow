@@ -18,7 +18,7 @@ const (
 // Operation is a type for your job "name" or "action" (e.g., "ADD_CUSTOMER").
 type Operation string
 
-// JobRecord corresponds to one row in the card.jobs table.
+// JobRecord corresponds to one row in the jobs table.
 type JobRecord struct {
 	ID          uint64
 	Operation   Operation
