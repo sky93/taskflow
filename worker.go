@@ -178,32 +178,74 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 
 // executeJob calls the appropriate handler for the job’s operation, optionally enforcing a timeout.
 func (w *Worker) executeJob(ctx context.Context, jobRec *JobRecord) (any, error) {
-	handler, err := w.getHandler(jobRec.Operation)
-	if err != nil {
-		return nil, err
-	}
+	// 1) Try advanced handler first
+	advConstructor, advErr := w.getAdvancedHandler(jobRec.Operation)
+	if advErr == nil {
+		// We have an advanced job constructor, so create the job
+		advancedJob, err := advConstructor()
+		if err != nil {
+			return nil, err
+		}
 
-	if w.cfg.JobTimeout <= 0 {
-		return handler(*jobRec)
-	}
+		// Suppose we respect the job’s own JobTimeout()
+		jobTimeout := advancedJob.JobTimeout()
+		if jobTimeout <= 0 {
+			// No forced timeout: just call it directly
+			return advancedJob.Run(*jobRec)
+		}
 
-	jobCtx, cancel := context.WithTimeout(ctx, w.cfg.JobTimeout)
-	defer cancel()
+		// Create a context with that timeout
+		jobCtx, cancel := context.WithTimeout(ctx, jobTimeout)
+		defer cancel()
 
-	doneCh := make(chan struct{})
-	var output any
-	var runErr error
+		// Now run the job in a goroutine
+		doneCh := make(chan struct{})
+		var output any
+		var runErr error
 
-	go func() {
-		output, runErr = handler(*jobRec)
-		close(doneCh)
-	}()
+		go func() {
+			output, runErr = advancedJob.Run(*jobRec)
+			close(doneCh)
+		}()
 
-	select {
-	case <-jobCtx.Done():
-		msg := fmt.Sprintf("job timed out after %s", w.cfg.JobTimeout)
-		return &msg, errors.New(msg)
-	case <-doneCh:
-		return output, runErr
+		// Wait for either the job to finish or the timeout to expire
+		select {
+		case <-jobCtx.Done():
+			msg := fmt.Sprintf("job timed out after %s", jobTimeout)
+			return &msg, errors.New(msg)
+		case <-doneCh:
+			return output, runErr
+		}
+	} else {
+		// 2) If no advanced constructor, use the normal job handler
+		normalHandler, err := w.getHandler(jobRec.Operation)
+		if err != nil {
+			return nil, err
+		}
+
+		// Possibly enforce w.cfg.JobTimeout if non-zero
+		if w.cfg.JobTimeout <= 0 {
+			return normalHandler(*jobRec)
+		}
+
+		jobCtx, cancel := context.WithTimeout(ctx, w.cfg.JobTimeout)
+		defer cancel()
+
+		doneCh := make(chan struct{})
+		var output any
+		var runErr error
+
+		go func() {
+			output, runErr = normalHandler(*jobRec)
+			close(doneCh)
+		}()
+
+		select {
+		case <-jobCtx.Done():
+			msg := fmt.Sprintf("job timed out after %s", w.cfg.JobTimeout)
+			return &msg, errors.New(msg)
+		case <-doneCh:
+			return output, runErr
+		}
 	}
 }

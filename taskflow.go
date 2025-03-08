@@ -7,10 +7,11 @@ import (
 )
 
 type TaskFlow struct {
-	cfg       *Config
-	mgr       *Manager // We set this once we start workers
-	handlers  map[Operation]JobHandler
-	handlerMu sync.RWMutex
+	cfg              *Config
+	mgr              *Manager // We set this once we start workers
+	handlers         map[Operation]JobHandler
+	advancedHandlers map[Operation]AdvancedJobConstructor
+	handlerMu        sync.RWMutex
 }
 
 func New(cfg Config) *TaskFlow {
@@ -23,8 +24,9 @@ func New(cfg Config) *TaskFlow {
 	}
 
 	return &TaskFlow{
-		cfg:      &cfg,
-		handlers: make(map[Operation]JobHandler),
+		cfg:              &cfg,
+		handlers:         make(map[Operation]JobHandler),
+		advancedHandlers: make(map[Operation]AdvancedJobConstructor),
 	}
 }
 
@@ -60,7 +62,7 @@ func (tf *TaskFlow) StartWorkers(ctx context.Context, count int) {
 		})
 		return
 	}
-	mgr := startWorkersInternal(ctx, count, tf.cfg, tf.handlers)
+	mgr := startWorkersInternal(ctx, count, tf.cfg, tf.handlers, tf.advancedHandlers)
 	tf.mgr = mgr
 }
 

@@ -8,23 +8,25 @@ import (
 )
 
 type Manager struct {
-	cfg      *Config
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	handlers map[Operation]JobHandler
-	wakeup   chan struct{}
+	cfg              *Config
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
+	handlers         map[Operation]JobHandler
+	advancedHandlers map[Operation]AdvancedJobConstructor
+	wakeup           chan struct{}
 }
 
 // startWorkersInternal is basically your old StartWorkers logic
-func startWorkersInternal(ctx context.Context, count int, cfg *Config, handlers map[Operation]JobHandler) *Manager {
+func startWorkersInternal(ctx context.Context, count int, cfg *Config, handlers map[Operation]JobHandler, advHandlers map[Operation]AdvancedJobConstructor) *Manager {
 	mgrCtx, cancel := context.WithCancel(ctx)
 	mgr := &Manager{
-		cfg:      cfg,
-		ctx:      mgrCtx,
-		cancel:   cancel,
-		handlers: handlers,
-		wakeup:   make(chan struct{}, count),
+		cfg:              cfg,
+		ctx:              mgrCtx,
+		cancel:           cancel,
+		handlers:         handlers,
+		advancedHandlers: advHandlers,
+		wakeup:           make(chan struct{}, count),
 	}
 
 	cfg.logInfo(LogEvent{

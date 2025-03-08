@@ -2,10 +2,10 @@ package taskflow
 
 import "time"
 
-// Job is the interface each job must implement.
-type Job interface {
+// AdvancedJob Job is the interface each job must implement.
+type AdvancedJob interface {
 	Run(jr JobRecord) (any, error)
-	RetryCount() uint
-	BackoffTime() time.Duration
-	JobTimeout() time.Duration
+	RetryCount() uint           // returns how many times we allow this job to fail
+	BackoffTime() time.Duration // how long to wait after a failure
+	JobTimeout() time.Duration  // how long this job may run before timing out
 }
