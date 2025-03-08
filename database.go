@@ -89,7 +89,7 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 		return err
 	}
 	outputQ := outputJson
-	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "\"null\"" {
+	if outputJson == nil || len(outputJson) == 0 || string(outputJson) == "\"null\"" || string(outputJson) == "null" {
 		outputQ = nil
 	}
 
@@ -98,7 +98,7 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 		return err
 	}
 	errorOutputQ := errorOutputJson
-	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "\"null\"" {
+	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "\"null\"" || string(errorOutputJson) == "null" {
 		errorOutputJson = nil
 	}
 
