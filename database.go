@@ -35,7 +35,6 @@ ORDER BY available_at
 LIMIT 1
 FOR UPDATE
 `
-	var pldJson []byte
 	row := tx.QueryRow(query, cfg.RetryCount)
 	var rec JobRecord
 	var operationStr, statusStr string
@@ -43,7 +42,7 @@ FOR UPDATE
 		&rec.ID,
 		&operationStr,
 		&statusStr,
-		&pldJson,
+		&rec.payload,
 		&rec.Output,
 		&rec.LockedBy,
 		&rec.LockedUntil,
@@ -57,9 +56,6 @@ FOR UPDATE
 			// no job
 			return nil, sql.ErrNoRows
 		}
-		return nil, err
-	}
-	if err = json.Unmarshal(pldJson, &rec.Payload); err != nil {
 		return nil, err
 	}
 	rec.Operation = Operation(operationStr)

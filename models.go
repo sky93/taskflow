@@ -1,6 +1,7 @@
 package taskflow
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -22,7 +23,7 @@ type JobRecord struct {
 	ID          uint64
 	Operation   Operation
 	Status      JobStatus
-	Payload     any
+	payload     []byte
 	Output      any
 	LockedBy    *string
 	LockedUntil *time.Time
@@ -30,4 +31,8 @@ type JobRecord struct {
 	AvailableAt *time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+func (jr *JobRecord) GetPayload(input any) error {
+	return json.Unmarshal(jr.payload, &input)
 }
