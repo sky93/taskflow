@@ -142,7 +142,7 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 		nextAvailableAt = &t
 	}
 
-	if err := finishJob(w.cfg.DB, jobRec.ID, finalStatus, output, incrementRetry, nextAvailableAt); err != nil {
+	if err = finishJob(w.cfg.DB, jobRec.ID, finalStatus, output, incrementRetry, nextAvailableAt, execErr); err != nil {
 		w.cfg.logError(LogEvent{
 			Message:   fmt.Sprintf("Error finishing job %d", jobRec.ID),
 			WorkerID:  w.id,
@@ -155,7 +155,7 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 	elapsed := time.Since(start)
 	if execErr != nil {
 		w.cfg.logError(LogEvent{
-			Message:   fmt.Sprintf("Job %d FAILED in %v", jobRec.ID, elapsed),
+			Message:   "Job FAILED.",
 			WorkerID:  w.id,
 			JobID:     &jobRec.ID,
 			Operation: &opStr,
@@ -164,7 +164,7 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 		})
 	} else {
 		w.cfg.logInfo(LogEvent{
-			Message:   fmt.Sprintf("Job %d COMPLETED in %v", jobRec.ID, elapsed),
+			Message:   "Job COMPLETED.",
 			WorkerID:  w.id,
 			JobID:     &jobRec.ID,
 			Operation: &opStr,

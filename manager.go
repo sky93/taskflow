@@ -3,6 +3,7 @@ package taskflow
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"sync"
 	"time"
 )
@@ -35,7 +36,7 @@ func startWorkersInternal(ctx context.Context, count int, cfg *Config, handlers 
 
 	for i := 0; i < count; i++ {
 		w := &Worker{
-			id:      fmt.Sprintf("worker-%d", i),
+			id:      uuid.New().String(),
 			cfg:     cfg,
 			manager: mgr,
 		}

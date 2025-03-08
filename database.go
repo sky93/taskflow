@@ -83,7 +83,7 @@ WHERE id = ?
 	return err
 }
 
-func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time) error {
+func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time, errorOutput any) error {
 	outputJson, err := json.Marshal(output)
 	if err != nil {
 		return err
@@ -93,9 +93,19 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 		outputQ = nil
 	}
 
+	errorOutputJson, err := json.Marshal(output)
+	if err != nil {
+		return err
+	}
+	errorOutputQ := errorOutputJson
+	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "null" {
+		errorOutputJson = nil
+	}
+
 	setClauses := []string{
 		"status = ?",
 		"output = ?",
+		"error_output = ?",
 		"updated_at = ?",
 		"locked_by = NULL",
 		"locked_until = NULL",
@@ -103,6 +113,7 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 	args := []interface{}{
 		finalStatus,
 		outputQ,
+		errorOutputQ,
 		time.Now().UTC().Round(time.Microsecond),
 	}
 
