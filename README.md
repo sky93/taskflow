@@ -6,7 +6,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sky93/taskflow.svg)](https://pkg.go.dev/github.com/sky93/taskflow)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sky93/taskflow)](https://goreportcard.com/report/github.com/sky93/taskflow)
 
-**taskflow** is a lightweight Go library for running background jobs from a MySQL queue table. It handles:
+**Taskflow** is a lightweight Go library for running background jobs out of a MySQL queue table. It handles:
 
 - Fetching jobs from the database
 - Locking and retrying failed jobs
@@ -14,6 +14,17 @@
 - Running custom job logic with optional timeouts
 - Structured logging via user-defined callbacks
 - Graceful shutdown of worker pools
+
+---
+
+## Table of Contents
+1. [Installation](#installation)
+2. [Database Schema](#database-schema)
+3. [Quick Start Example](#quick-start-example)
+4. [Contributing](#contributing)
+5. [License](#license)
+
+---
 
 ## Installation
 
@@ -25,10 +36,10 @@ go get github.com/sky93/taskflow
 
 ## Database Schema
 
-You must create or already have a `card.jobs` table. For example:
+Your database should contain a `jobs` table. For example:
 
 ```sql
-CREATE TABLE IF NOT EXISTS card.jobs (
+CREATE TABLE IF NOT EXISTS jobs (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   operation VARCHAR(50) NOT NULL,
   status ENUM('PENDING','IN_PROGRESS','COMPLETED','FAILED') NOT NULL DEFAULT 'PENDING',
@@ -47,14 +58,14 @@ CREATE TABLE IF NOT EXISTS card.jobs (
 
 ## Quick Start Example
 
-Below is a complete example demonstrating how to:
+Below is a **complete**, minimal example showing:
 
-1. **Initialize** a `*sql.DB`
-2. **Create** a `Config` and pass it to `taskflow.New(...)`
-3. **Register** a custom job handler
-4. **Create** a job
-5. **Start** workers
-6. **Shut down** gracefully
+1. Connecting to the database
+2. Creating a `taskflow.Config` and a new `TaskFlow`
+3. Registering a custom job handler
+4. Starting workers
+5. Creating a job
+6. Shutting down gracefully
 
 ```go
 package main
@@ -65,39 +76,32 @@ import (
     "fmt"
     "time"
 
-    "github.com/sky93/taskflow"
     _ "github.com/go-sql-driver/mysql"
+    "github.com/sky93/taskflow"
 )
 
-// Our "Hello" job
-type HelloJob struct {
-    name   string
-    output string
+// MyPayload is the shape of the data we expect in the job payload.
+type MyPayload struct {
+    Greeting string
 }
 
-func NewHelloJob(payload *string) (taskflow.Job, error) {
-    if payload == nil || *payload == "" {
-        return nil, fmt.Errorf("invalid or empty payload")
+// HelloHandler processes jobs of type "HELLO".
+func HelloHandler(jr taskflow.JobRecord) (any, error) {
+    var payload MyPayload
+    if err := jr.GetPayload(&payload); err != nil {
+        return nil, err
     }
-    return &HelloJob{name: *payload}, nil
-}
 
-func (j *HelloJob) Run() error {
-    // Simulate some logic
-    j.output = "Hello, " + j.name + "!"
-    return nil
-}
-
-func (j *HelloJob) GetOutput() *string {
-    if j.output == "" {
-        return nil
-    }
-    return &j.output
+    // Here we just print the greeting; real logic can be anything.
+    fmt.Println("Received greeting:", payload.Greeting)
+    return nil, nil
 }
 
 func main() {
+    ctx := context.Background()
+
     // 1) Connect to the DB
-    dsn := "root:password@tcp(127.0.0.1:3306)/card?parseTime=true"
+    dsn := "root:password@tcp(127.0.0.1:3306)/myDbName?parseTime=true"
     db, err := sql.Open("mysql", dsn)
     if err != nil {
         panic(err)
@@ -108,51 +112,60 @@ func main() {
     fmt.Println("Connected to database.")
 
     // 2) Create the taskflow config
-    cfg := &taskflow.Config{
+    cfg := taskflow.Config{
         DB:           db,
         RetryCount:   3,
         BackoffTime:  30 * time.Second,
         PollInterval: 5 * time.Second,
         JobTimeout:   10 * time.Second,
 
-        // Optional structured logging
+        // Optional logging
         InfoLog: func(ev taskflow.LogEvent) {
             fmt.Printf("[INFO] %s\n", ev.Message)
-            if ev.Err != nil {
-                fmt.Printf("       error: %v\n", ev.Err)
-            }
         },
         ErrorLog: func(ev taskflow.LogEvent) {
             fmt.Printf("[ERROR] %s\n", ev.Message)
-            if ev.Err != nil {
-                fmt.Printf("        error: %v\n", ev.Err)
-            }
-            fmt.Println()
         },
     }
 
     // 3) Create an instance of TaskFlow
     flow := taskflow.New(cfg)
 
-    // 4) Register our handler (globally for "HELLO")
-    taskflow.RegisterHandler("HELLO", taskflow.MakeHandler(NewHelloJob))
+    // 4) Register our "HELLO" handler
+    flow.RegisterHandler("HELLO", HelloHandler)
 
-    // 5) Create a new job
-    jobID, err := flow.CreateJob("HELLO", `"Alice"`)
+    // 5) Start workers (2 concurrent workers)
+    flow.StartWorkers(ctx, 2)
+
+    // Create a new "HELLO" job
+    jobID, err := flow.CreateJob(ctx, "HELLO", MyPayload{Greeting: "Hello from TaskFlow!"}, time.Now())
     if err != nil {
         panic(err)
     }
     fmt.Printf("Created job ID %d\n", jobID)
 
-    // 6) Start workers
-    ctx := context.Background()
-    flow.StartWorkers(ctx, 2)
+    // Let it run for a few seconds
+    time.Sleep(5 * time.Second)
 
-    // Let it run for 30 seconds
-    time.Sleep(30 * time.Second)
-
-    // 7) Shutdown gracefully
+    // 6) Shutdown gracefully
     flow.Shutdown(10 * time.Second)
     fmt.Println("All done.")
 }
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. **Fork** the repository
+2. Create a new **branch** for your feature or fix
+3. Commit your changes, and **add tests** if possible
+4. Submit a **pull request** and provide a clear description of your changes
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

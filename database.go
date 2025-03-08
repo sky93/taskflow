@@ -25,7 +25,7 @@ SELECT
   available_at,
   created_at,
   updated_at
-FROM card.jobs
+FROM jobs
 WHERE 
   (status = 'PENDING' OR status = 'FAILED')
   AND (locked_until IS NULL OR locked_until < NOW())
@@ -65,7 +65,7 @@ FOR UPDATE
 
 func assignJobToWorker(tx *sql.Tx, jobID uint64, workerID string, lockUntil time.Time) error {
 	stmt := `
-UPDATE card.jobs
+UPDATE jobs
 SET 
   status = ?,
   locked_by = ?,
@@ -117,7 +117,7 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 
 	args = append(args, jobID)
 
-	query := fmt.Sprintf("UPDATE card.jobs SET %s WHERE id = ?", strings.Join(setClauses, ", "))
+	query := fmt.Sprintf("UPDATE jobs SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 	_, err = db.Exec(query, args...)
 	return err
 }
@@ -128,7 +128,7 @@ func createJob(ctx context.Context, tf *TaskFlow, operation Operation, payload a
 		return 0, err
 	}
 	now := time.Now().Round(time.Microsecond)
-	query := "INSERT INTO card.jobs (operation, status, payload, locked_by, locked_until, retry_count, available_at, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?)"
+	query := "INSERT INTO jobs (operation, status, payload, locked_by, locked_until, retry_count, available_at, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?)"
 	res, err := tf.cfg.DB.ExecContext(ctx, query, operation, JobPending, plq, executeAt, now, now)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert job: %w", err)
