@@ -93,13 +93,15 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 		outputQ = nil
 	}
 
-	errorOutputJson, err := json.Marshal(errorOutput)
-	if err != nil {
-		return err
-	}
-	errorOutputQ := errorOutputJson
-	if errorOutputJson == nil || len(errorOutputJson) == 0 || string(errorOutputJson) == "\"null\"" || string(errorOutputJson) == "null" || string(errorOutputJson) == "\"\"" {
-		errorOutputQ = nil
+	var errorOutputJson []byte = nil
+	if errorOutput != nil {
+		errorOutputJson, err = json.Marshal(errorOutput.Error())
+		if err != nil {
+			return err
+		}
+		if len(string(errorOutputJson)) == 0 || string(errorOutputJson) == "\"null\"" || string(errorOutputJson) == "{}" || string(errorOutputJson) == "null" || string(errorOutputJson) == "\"\"" {
+			errorOutputJson = nil
+		}
 	}
 
 	setClauses := []string{
@@ -113,7 +115,7 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 	args := []interface{}{
 		finalStatus,
 		outputQ,
-		errorOutputQ,
+		string(errorOutputJson),
 		time.Now().UTC().Round(time.Microsecond),
 	}
 
