@@ -31,6 +31,9 @@ type Config struct {
 	// DB is the user-provided database connection where the jobs table is stored.
 	DB *sql.DB
 
+	// DbName is name of the database.
+	DbName string
+
 	// RetryCount is how many times we allow a job to fail before ignoring it.
 	RetryCount uint
 

@@ -13,27 +13,27 @@ import (
 // getPendingJob looks for a job with status in (PENDING, FAILED), not locked, retry < cfg.RetryCount, available now.
 func getPendingJob(tx *sql.Tx, cfg *Config) (*JobRecord, error) {
 	query := `
-SELECT 
-  id, 
-  operation, 
-  status, 
-  payload, 
-  output, 
-  locked_by, 
-  locked_until, 
-  retry_count, 
-  available_at,
-  created_at,
-  updated_at
-FROM jobs
-WHERE 
-  (status = 'PENDING' OR status = 'FAILED')
-  AND (locked_until IS NULL OR locked_until < NOW())
-  AND retry_count < ?
-  AND available_at <= NOW()
-ORDER BY available_at
-LIMIT 1
-FOR UPDATE
+			SELECT 
+			  id, 
+			  operation, 
+			  status, 
+			  payload, 
+			  output, 
+			  locked_by, 
+			  locked_until, 
+			  retry_count, 
+			  available_at,
+			  created_at,
+			  updated_at
+			FROM ` + cfg.DbName + `.jobs
+			WHERE 
+			  (status = 'PENDING' OR status = 'FAILED')
+			  AND (locked_until IS NULL OR locked_until < NOW())
+			  AND retry_count < ?
+			  AND available_at <= NOW()
+			ORDER BY available_at
+			LIMIT 1
+			FOR UPDATE
 `
 	row := tx.QueryRow(query, cfg.RetryCount)
 	var rec JobRecord
@@ -63,15 +63,14 @@ FOR UPDATE
 	return &rec, nil
 }
 
-func assignJobToWorker(tx *sql.Tx, jobID uint64, workerID string, lockUntil time.Time) error {
-	stmt := `
-UPDATE jobs
-SET 
-  status = ?,
-  locked_by = ?,
-  locked_until = ?,
-  updated_at = ?
-WHERE id = ?
+func assignJobToWorker(cfg *Config, tx *sql.Tx, jobID uint64, workerID string, lockUntil time.Time) error {
+	stmt := `UPDATE ` + cfg.DbName + `.jobs
+		SET 
+		  status = ?,
+		  locked_by = ?,
+		  locked_until = ?,
+		  updated_at = ?
+		WHERE id = ?
 `
 	_, err := tx.Exec(stmt,
 		JobInProgress,
@@ -83,7 +82,7 @@ WHERE id = ?
 	return err
 }
 
-func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time, errorOutput error) error {
+func finishJob(cfg *Config, jobID uint64, finalStatus JobStatus, output any, incrementRetry bool, availableAt *time.Time, errorOutput error) error {
 	outputJson, err := json.Marshal(output)
 	if err != nil {
 		return err
@@ -130,8 +129,8 @@ func finishJob(db *sql.DB, jobID uint64, finalStatus JobStatus, output any, incr
 
 	args = append(args, jobID)
 
-	query := fmt.Sprintf("UPDATE jobs SET %s WHERE id = ?", strings.Join(setClauses, ", "))
-	_, err = db.Exec(query, args...)
+	query := fmt.Sprintf("UPDATE %s.jobs SET %s WHERE id = ?", cfg.DbName, strings.Join(setClauses, ", "))
+	_, err = cfg.DB.Exec(query, args...)
 	return err
 }
 
@@ -141,7 +140,7 @@ func createJob(ctx context.Context, tf *TaskFlow, operation Operation, payload a
 		return 0, err
 	}
 	now := time.Now().Round(time.Microsecond)
-	query := "INSERT INTO jobs (operation, status, payload, locked_by, locked_until, retry_count, available_at, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?)"
+	query := fmt.Sprintf("INSERT INTO %s.jobs (operation, status, payload, locked_by, locked_until, retry_count, available_at, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?)", tf.cfg.DbName)
 	res, err := tf.cfg.DB.ExecContext(ctx, query, operation, JobPending, plq, executeAt, now, now)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert job: %w", err)

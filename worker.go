@@ -92,7 +92,7 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 	}
 
 	lockUntil := time.Now().Add(w.cfg.JobTimeout)
-	if err := assignJobToWorker(tx, jobRec.ID, w.id, lockUntil); err != nil {
+	if err := assignJobToWorker(w.cfg, tx, jobRec.ID, w.id, lockUntil); err != nil {
 		_ = tx.Rollback()
 		w.cfg.logError(LogEvent{
 			Message:  fmt.Sprintf("Error assigning job %d to worker %s", jobRec.ID, w.id),
@@ -142,7 +142,7 @@ func (w *Worker) fetchAndProcess(ctx context.Context) {
 		nextAvailableAt = &t
 	}
 
-	if err = finishJob(w.cfg.DB, jobRec.ID, finalStatus, output, incrementRetry, nextAvailableAt, execErr); err != nil {
+	if err = finishJob(w.cfg, jobRec.ID, finalStatus, output, incrementRetry, nextAvailableAt, execErr); err != nil {
 		w.cfg.logError(LogEvent{
 			Message:   fmt.Sprintf("Error finishing job %d", jobRec.ID),
 			WorkerID:  w.id,
